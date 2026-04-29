@@ -56,6 +56,15 @@ const EnvBasicAuthPassword = "BASIC_AUTH_PASSWORD"
 const EnvAuthenticatedWebhooks = "AUTHENTICATED_WEBHOOKS"
 const EnvTokenSecret = "TOKEN_SECRET"
 
+// OAuth2 configuration for the dashboard
+const EnvOAuthClientID = "OAUTH2_CLIENT_ID"
+const EnvOAuthClientSecret = "OAUTH2_CLIENT_SECRET"
+const EnvOAuthRedirectURL = "OAUTH2_REDIRECT_URL"
+const EnvOAuthAuthURL = "OAUTH2_AUTH_URL"
+const EnvOAuthTokenURL = "OAUTH2_TOKEN_URL"
+const EnvOAuthUserInfoURL = "OAUTH2_USER_INFO_URL"
+const EnvOAuthScopes = "OAUTH2_SCOPES"
+
 // KeelLogoURL - is a logo URL for bot icon
 const KeelLogoURL = "https://keel.sh/img/logo.png"
 

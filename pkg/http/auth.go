@@ -10,6 +10,85 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+// AuthConfig is returned by /v1/auth/config so the frontend knows which auth
+// methods are available.
+type AuthConfig struct {
+	BasicAuthEnabled bool `json:"basic_auth_enabled"`
+	OAuthEnabled     bool `json:"oauth_enabled"`
+}
+
+func (s *TriggerServer) authConfigHandler(resp http.ResponseWriter, req *http.Request) {
+	cfg := AuthConfig{
+		BasicAuthEnabled: s.authenticator.Enabled(),
+		OAuthEnabled:     s.oauthProvider.Enabled(),
+	}
+	response(&cfg, http.StatusOK, nil, resp, req)
+}
+
+// oauthInitiateHandler starts the OAuth2 Authorization Code flow by redirecting
+// the browser to the configured provider's authorization URL.
+func (s *TriggerServer) oauthInitiateHandler(resp http.ResponseWriter, req *http.Request) {
+	state, err := auth.GenerateState()
+	if err != nil {
+		log.WithError(err).Error("oauth: failed to generate state")
+		http.Error(resp, "internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	http.SetCookie(resp, &http.Cookie{
+		Name:     "oauth_state",
+		Value:    state,
+		Path:     "/",
+		MaxAge:   300, // 5 minutes
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	http.Redirect(resp, req, s.oauthProvider.GetAuthURL(state), http.StatusFound)
+}
+
+// oauthCallbackHandler handles the redirect from the OAuth2 provider, exchanges
+// the authorization code for a Keel JWT, then redirects the browser to the
+// frontend with the token as a query parameter.
+func (s *TriggerServer) oauthCallbackHandler(resp http.ResponseWriter, req *http.Request) {
+	stateCookie, err := req.Cookie("oauth_state")
+	if err != nil {
+		http.Error(resp, "missing state cookie", http.StatusBadRequest)
+		return
+	}
+
+	if req.URL.Query().Get("state") != stateCookie.Value {
+		http.Error(resp, "invalid state", http.StatusBadRequest)
+		return
+	}
+
+	// Clear the state cookie immediately.
+	http.SetCookie(resp, &http.Cookie{
+		Name:     "oauth_state",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+	})
+
+	code := req.URL.Query().Get("code")
+	if code == "" {
+		http.Error(resp, "missing code", http.StatusBadRequest)
+		return
+	}
+
+	authResp, err := s.oauthProvider.ExchangeCode(req.Context(), code)
+	if err != nil {
+		log.WithError(err).Error("oauth: code exchange failed")
+		http.Error(resp, "authentication failed", http.StatusUnauthorized)
+		return
+	}
+
+	// Redirect the browser to the login page carrying the issued token so the
+	// frontend can store it and proceed to the dashboard.
+	http.Redirect(resp, req, "/user/login?token="+authResp.Token, http.StatusFound)
+}
+
 func authHeadersMiddleware(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {
 	rw.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 	rw.Header().Set("Access-Control-Allow-Headers",
@@ -146,3 +225,4 @@ func (s *TriggerServer) refreshHandler(resp http.ResponseWriter, req *http.Reque
 
 	response(authResp, http.StatusOK, err, resp, req)
 }
+

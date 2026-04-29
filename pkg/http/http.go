@@ -38,6 +38,9 @@ type Opts struct {
 
 	Authenticator auth.Authenticator
 
+	// OAuthProvider is optional; when set it enables OAuth2 login for the dashboard.
+	OAuthProvider *auth.OAuthProvider
+
 	GRC *k8s.GenericResourceCache
 
 	KubernetesClient kubernetes.Implementer
@@ -62,6 +65,7 @@ type TriggerServer struct {
 
 	store         store.Store
 	authenticator auth.Authenticator
+	oauthProvider *auth.OAuthProvider
 
 	uiDir string
 
@@ -78,6 +82,7 @@ func NewTriggerServer(opts *Opts) *TriggerServer {
 		approvalsManager:      opts.ApprovalManager,
 		router:                mux.NewRouter(),
 		authenticator:         opts.Authenticator,
+		oauthProvider:         opts.OAuthProvider,
 		store:                 opts.Store,
 		uiDir:                 opts.UIDir,
 		authenticatedWebhooks: opts.AuthenticatedWebhooks,
@@ -131,10 +136,24 @@ func (s *TriggerServer) registerRoutes(mux *mux.Router) {
 
 	mux.Handle("/metrics", promhttp.Handler())
 
-	if s.authenticator.Enabled() {
+	// auth config is always available so the UI can discover available auth methods
+	mux.HandleFunc("/v1/auth/config", s.authConfigHandler).Methods("GET", "OPTIONS")
+
+	authEnabled := s.authenticator.Enabled() || s.oauthProvider.Enabled()
+
+	if authEnabled {
 		log.Info("authentication enabled, setting up admin HTTP handlers")
+
+		if s.authenticator.Enabled() {
+			mux.HandleFunc("/v1/auth/login", s.loginHandler).Methods("POST", "OPTIONS")
+		}
+
+		if s.oauthProvider.Enabled() {
+			mux.HandleFunc("/v1/auth/oauth/initiate", s.oauthInitiateHandler).Methods("GET", "OPTIONS")
+			mux.HandleFunc("/v1/auth/oauth/callback", s.oauthCallbackHandler).Methods("GET", "OPTIONS")
+		}
+
 		// auth
-		mux.HandleFunc("/v1/auth/login", s.loginHandler).Methods("POST", "OPTIONS")
 		mux.HandleFunc("/v1/auth/info", s.requireAdminAuthorization(s.userInfoHandler)).Methods("GET", "OPTIONS")
 		mux.HandleFunc("/v1/auth/user", s.requireAdminAuthorization(s.userInfoHandler)).Methods("GET", "OPTIONS")
 		mux.HandleFunc("/v1/auth/logout", s.requireAdminAuthorization(s.logoutHandler)).Methods("POST", "GET", "OPTIONS")

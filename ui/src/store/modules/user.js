@@ -55,6 +55,19 @@ const user = {
       })
     },
 
+    // OAuthLoginSuccess stores the JWT issued after a successful OAuth2 flow.
+    OAuthLoginSuccess ({ commit }, { token }) {
+      return new Promise((resolve, reject) => {
+        commit('SET_TOKEN', token)
+        Vue.ls.set(ACCESS_TOKEN, token, 7 * 24 * 60 * 60 * 1000)
+        // Set the bearer token so that vue-auth / vue-resource pick it up for
+        // subsequent API requests.
+        Vue.http.headers.common['Authorization'] = `Bearer ${token}`
+        commit('SET_CREDENTIALS', { token })
+        resolve()
+      })
+    },
+
     // User info
     GetInfo ({ commit }) {
       // return api.get('user/info')

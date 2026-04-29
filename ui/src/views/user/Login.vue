@@ -1,6 +1,7 @@
 <template>
   <div class="main">
     <a-form
+      v-if="basicAuthEnabled"
       id="formLogin"
       class="user-layout-login"
       ref="formLogin"
@@ -47,6 +48,15 @@
       </a-form-item>
     </a-form>
 
+    <div v-if="oauthEnabled" :class="{ 'user-layout-login': true, 'oauth-section': basicAuthEnabled }">
+      <a-button
+        size="large"
+        type="default"
+        class="login-button"
+        @click="handleOAuthLogin"
+      >Login with OAuth</a-button>
+    </div>
+
     <two-step-captcha
       v-if="requiredTwoStepCaptcha"
       :visible="stepCaptchaVisible"
@@ -74,8 +84,38 @@ export default {
         // login type: 0 email, 1 username, 2 telephone
         loginType: 0,
         smsSendBtn: false
-      }
+      },
+      basicAuthEnabled: false,
+      oauthEnabled: false
     }
+  },
+
+  created () {
+    // Handle OAuth callback: backend redirects to /user/login?token=<jwt>
+    const token = this.$route.query.token
+    if (token) {
+      this.$store.dispatch('OAuthLoginSuccess', { token })
+        .then(() => {
+          this.$router.push({ name: 'dashboard' })
+          this.$notification.success({
+            message: 'Login successful!',
+            description: 'Loading data..'
+          })
+        })
+        .catch(err => this.requestFailed(err))
+      return
+    }
+
+    // Fetch auth config to determine which login methods to display.
+    this.$http.get('auth/config')
+      .then(response => {
+        this.basicAuthEnabled = response.body.basic_auth_enabled
+        this.oauthEnabled = response.body.oauth_enabled
+      })
+      .catch(() => {
+        // Fallback: show basic auth form if config endpoint is unavailable.
+        this.basicAuthEnabled = true
+      })
   },
 
   methods: {
@@ -136,6 +176,10 @@ export default {
           }, 600)
         }
       })
+    },
+
+    handleOAuthLogin () {
+      window.location.href = '/v1/auth/oauth/initiate'
     },
 
     loginSuccess (res, loginParams) {
@@ -203,4 +247,9 @@ export default {
     }
   }
 }
+
+.oauth-section {
+  margin-top: 16px;
+}
 </style>
+

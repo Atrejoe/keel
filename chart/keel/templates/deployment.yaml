@@ -146,6 +146,25 @@ spec:
             - name: BASIC_AUTH_USER
               value: "{{ .Values.basicauth.user }}"
 {{- end }}
+{{- if .Values.oauth.enabled }}
+            # Enable OAuth2 authentication
+            - name: OAUTH2_CLIENT_ID
+              value: "{{ .Values.oauth.clientId }}"
+            - name: OAUTH2_REDIRECT_URL
+              value: "{{ .Values.oauth.redirectUrl }}"
+            - name: OAUTH2_AUTH_URL
+              value: "{{ .Values.oauth.authUrl }}"
+            - name: OAUTH2_TOKEN_URL
+              value: "{{ .Values.oauth.tokenUrl }}"
+  {{- if .Values.oauth.userInfoUrl }}
+            - name: OAUTH2_USER_INFO_URL
+              value: "{{ .Values.oauth.userInfoUrl }}"
+  {{- end }}
+  {{- if .Values.oauth.scopes }}
+            - name: OAUTH2_SCOPES
+              value: "{{ .Values.oauth.scopes }}"
+  {{- end }}
+{{- end }}
 {{- if .Values.slack.enabled }}
             - name: SLACK_CHANNELS
               value: "{{ .Values.slack.channel }}"

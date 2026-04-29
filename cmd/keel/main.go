@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"context"
@@ -362,10 +363,25 @@ type TriggerOpts struct {
 // func setupTriggers(ctx context.Context, providers provider.Providers, approvalsManager approvals.Manager, grc *k8s.GenericResourceCache, k8sClient kubernetes.Implementer) (teardown func()) {
 func setupTriggers(ctx context.Context, opts *TriggerOpts) (teardown func()) {
 
+	// Use a shared secret so that tokens issued by either the basic auth or
+	// OAuth provider can be validated by the same JWT middleware.
+	tokenSecret := []byte(os.Getenv(constants.EnvTokenSecret))
+
 	authenticator := auth.New(&auth.Opts{
 		Username: os.Getenv(constants.EnvBasicAuthUser),
 		Password: os.Getenv(constants.EnvBasicAuthPassword),
-		Secret:   []byte(os.Getenv(constants.EnvTokenSecret)),
+		Secret:   tokenSecret,
+	})
+
+	oauthProvider := auth.NewOAuthProvider(&auth.OAuthOpts{
+		ClientID:     os.Getenv(constants.EnvOAuthClientID),
+		ClientSecret: os.Getenv(constants.EnvOAuthClientSecret),
+		RedirectURL:  os.Getenv(constants.EnvOAuthRedirectURL),
+		AuthURL:      os.Getenv(constants.EnvOAuthAuthURL),
+		TokenURL:     os.Getenv(constants.EnvOAuthTokenURL),
+		UserInfoURL:  os.Getenv(constants.EnvOAuthUserInfoURL),
+		Scopes:       parseOAuthScopes(os.Getenv(constants.EnvOAuthScopes)),
+		Secret:       tokenSecret,
 	})
 
 	// setting up generic http webhook server
@@ -377,6 +393,7 @@ func setupTriggers(ctx context.Context, opts *TriggerOpts) (teardown func()) {
 		ApprovalManager:       opts.approvalsManager,
 		Store:                 opts.store,
 		Authenticator:         authenticator,
+		OAuthProvider:         oauthProvider,
 		UIDir:                 opts.uiDir,
 		AuthenticatedWebhooks: os.Getenv(constants.EnvAuthenticatedWebhooks) == "true",
 	})
@@ -430,4 +447,20 @@ func setupTriggers(ctx context.Context, opts *TriggerOpts) (teardown func()) {
 	}
 
 	return teardown
+}
+
+// parseOAuthScopes splits a comma-separated scope string into a slice.
+// Returns nil when the input is empty, which causes OAuthProvider to use its defaults.
+func parseOAuthScopes(s string) []string {
+	if s == "" {
+		return nil
+	}
+	var scopes []string
+	for _, scope := range strings.Split(s, ",") {
+		scope = strings.TrimSpace(scope)
+		if scope != "" {
+			scopes = append(scopes, scope)
+		}
+	}
+	return scopes
 }

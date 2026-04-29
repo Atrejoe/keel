@@ -149,6 +149,19 @@ basicauth:
   user: ""
   password: ""
 
+# OAuth2 authentication for the dashboard
+# Generic OAuth2 Authorization Code flow, compatible with Authentik, Keycloak,
+# Dex, GitHub, Google, and any other standards-compliant provider.
+oauth:
+  enabled: false
+  # clientId: ""
+  # clientSecret: ""
+  # redirectUrl: "https://keel.example.com/v1/auth/oauth/callback"
+  # authUrl: "https://authentik.example.com/application/o/authorize/"
+  # tokenUrl: "https://authentik.example.com/application/o/token/"
+  # userInfoUrl: "https://authentik.example.com/application/o/userinfo/"
+  # scopes: "openid,profile,email"
+
 # Keel service
 # Enable to receive webhooks from Docker registries
 service:
