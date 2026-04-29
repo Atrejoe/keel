@@ -91,9 +91,13 @@ export default {
   },
 
   created () {
-    // Handle OAuth callback: backend redirects to /user/login?token=<jwt>
-    const token = this.$route.query.token
-    if (token) {
+    // Handle OAuth callback: backend redirects to /user/login#token=<jwt>
+    // The token is in the fragment to avoid server-side logging.
+    const hash = window.location.hash
+    if (hash && hash.startsWith('#token=')) {
+      const token = decodeURIComponent(hash.slice('#token='.length))
+      // Clear the fragment from the URL without adding a history entry.
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
       this.$store.dispatch('OAuthLoginSuccess', { token })
         .then(() => {
           this.$router.push({ name: 'dashboard' })
@@ -179,7 +183,7 @@ export default {
     },
 
     handleOAuthLogin () {
-      window.location.href = '/v1/auth/oauth/initiate'
+      window.location.href = `${window.location.protocol}//${window.location.host}/v1/auth/oauth/initiate`
     },
 
     loginSuccess (res, loginParams) {

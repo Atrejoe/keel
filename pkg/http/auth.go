@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	request "github.com/golang-jwt/jwt/v4/request"
 	"github.com/keel-hq/keel/pkg/auth"
@@ -20,7 +21,7 @@ type AuthConfig struct {
 func (s *TriggerServer) authConfigHandler(resp http.ResponseWriter, req *http.Request) {
 	cfg := AuthConfig{
 		BasicAuthEnabled: s.authenticator.Enabled(),
-		OAuthEnabled:     s.oauthProvider.Enabled(),
+		OAuthEnabled:     s.oauthProvider != nil && s.oauthProvider.Enabled(),
 	}
 	response(&cfg, http.StatusOK, nil, resp, req)
 }
@@ -41,6 +42,7 @@ func (s *TriggerServer) oauthInitiateHandler(resp http.ResponseWriter, req *http
 		Path:     "/",
 		MaxAge:   300, // 5 minutes
 		HttpOnly: true,
+		Secure:   isSecureRequest(req),
 		SameSite: http.SameSiteLaxMode,
 	})
 
@@ -49,7 +51,8 @@ func (s *TriggerServer) oauthInitiateHandler(resp http.ResponseWriter, req *http
 
 // oauthCallbackHandler handles the redirect from the OAuth2 provider, exchanges
 // the authorization code for a Keel JWT, then redirects the browser to the
-// frontend with the token as a query parameter.
+// frontend with the token in the URL fragment to avoid it appearing in server
+// access logs or browser history.
 func (s *TriggerServer) oauthCallbackHandler(resp http.ResponseWriter, req *http.Request) {
 	stateCookie, err := req.Cookie("oauth_state")
 	if err != nil {
@@ -69,6 +72,7 @@ func (s *TriggerServer) oauthCallbackHandler(resp http.ResponseWriter, req *http
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
+		Secure:   isSecureRequest(req),
 	})
 
 	code := req.URL.Query().Get("code")
@@ -84,9 +88,21 @@ func (s *TriggerServer) oauthCallbackHandler(resp http.ResponseWriter, req *http
 		return
 	}
 
-	// Redirect the browser to the login page carrying the issued token so the
-	// frontend can store it and proceed to the dashboard.
-	http.Redirect(resp, req, "/user/login?token="+authResp.Token, http.StatusFound)
+	// Redirect the browser to the login page. The token is placed in the URL
+	// fragment (hash) so it is never sent to the server and does not appear in
+	// server access logs.
+	redirectURL := "/user/login#token=" + url.QueryEscape(authResp.Token)
+	http.Redirect(resp, req, redirectURL, http.StatusFound)
+}
+
+// isSecureRequest reports whether the request was made over HTTPS, either
+// directly (req.TLS != nil) or through a reverse proxy that sets the
+// X-Forwarded-Proto header.
+func isSecureRequest(req *http.Request) bool {
+	if req.TLS != nil {
+		return true
+	}
+	return req.Header.Get("X-Forwarded-Proto") == "https"
 }
 
 func authHeadersMiddleware(rw http.ResponseWriter, r *http.Request, next http.HandlerFunc) {

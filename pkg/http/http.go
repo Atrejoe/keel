@@ -139,7 +139,7 @@ func (s *TriggerServer) registerRoutes(mux *mux.Router) {
 	// auth config is always available so the UI can discover available auth methods
 	mux.HandleFunc("/v1/auth/config", s.authConfigHandler).Methods("GET", "OPTIONS")
 
-	authEnabled := s.authenticator.Enabled() || s.oauthProvider.Enabled()
+	authEnabled := s.authenticator.Enabled() || (s.oauthProvider != nil && s.oauthProvider.Enabled())
 
 	if authEnabled {
 		log.Info("authentication enabled, setting up admin HTTP handlers")
